@@ -38,12 +38,7 @@ bool srvLearnPerson(ed_perception::LearnPerson::Request& req, ed_perception::Lea
     }
 
     openface_ros::LearnFace srv;
-    srv.request.name = req.person_name;    if (!client_learn_face.call(srv))
-    {
-        res.error_msg = "Could not call openface server";
-        ROS_ERROR("%s", res.error_msg.c_str());
-        return true;
-    }
+    srv.request.name = req.person_name;
 
     cv_bridge::CvImage image_msg;
     image_msg.encoding = sensor_msgs::image_encodings::BGR8;
@@ -59,7 +54,7 @@ bool srvLearnPerson(ed_perception::LearnPerson::Request& req, ed_perception::Lea
 
     if (!srv.response.error_msg.empty())
     {
-        res.error_msg = "Learning face failed. From openface: " + srv.response.error_msg;
+        res.error_msg = "OpenFace server (learn) responded with error: " + srv.response.error_msg;
         ROS_ERROR("%s", res.error_msg.c_str());
         return true;
     }
@@ -93,10 +88,18 @@ bool srvRecognizePerson(ed_perception::RecognizePerson::Request& req, ed_percept
 
     if (!client_detect_face.call(srv))
     {
-        res.error_msg = "Could not call openface server (detect)";
+        res.error_msg = "Could not call OpenFace server (detect)";
         ROS_ERROR("%s", res.error_msg.c_str());
         return true;
     }
+
+    if (!srv.response.error_msg.empty())
+    {
+        res.error_msg = "OpenFace server (detect) responded with error: " + srv.response.error_msg;
+        ROS_ERROR("%s", res.error_msg.c_str());
+        return true;
+    }
+
 
     ROS_INFO_STREAM("Openface found " << srv.response.face_detections.size() << " faces");
 
@@ -176,7 +179,7 @@ bool srvRecognizePerson(ed_perception::RecognizePerson::Request& req, ed_percept
         else
             det.gender = ed_perception::PersonDetection::FEMALE;
 
-        det.body_pose = "standing";
+        det.body_pose = "";
     }
 
     return true;
