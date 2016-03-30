@@ -139,9 +139,9 @@ bool srvRecognizePerson(ed_perception::RecognizePerson::Request& req, ed_percept
         // Get median depth
 
         std::vector<float> depths;
-        for(unsigned int i = 0; i < face_depth.cols * face_depth.rows; ++i)
+        for(unsigned int j = 0; j < face_depth.cols * face_depth.rows; ++j)
         {
-            float d = face_depth.at<float>(i);
+            float d = face_depth.at<float>(j);
             if (d > 0 && d == d)
                 depths.push_back(d);
         }
@@ -160,6 +160,8 @@ bool srvRecognizePerson(ed_perception::RecognizePerson::Request& req, ed_percept
 
         rgbd::View view(*image, image->getDepthImage().cols);
         geo::Vec3 face_pos = view.getRasterizer().project2Dto3D(roi_depth_center.x, roi_depth_center.y) * median_depth;
+
+        ROS_INFO_STREAM("Face " << i << ": position in camera frame: " << face_pos);
 
         geo::Pose3D pose = geo::Pose3D::identity();
         pose.t = face_pos;
