@@ -1,0 +1,4 @@
+string person_name
+sensor_msgs/Image image
+---
+string error_msg

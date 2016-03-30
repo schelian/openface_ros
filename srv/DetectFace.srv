@@ -1,0 +1,4 @@
+sensor_msgs/Image image
+---
+FaceDetection[] face_detections
+string error_msg
