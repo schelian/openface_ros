@@ -205,9 +205,9 @@ int main(int argc, char **argv)
     ros::NodeHandle nh_private("~");
 
     std::string rgbd_topic;
-    if (!nh_private.getParam("rgbd_topic", rgbd_topic))
+    if (!nh_private.getParam("camera_topic", rgbd_topic))
     {
-        ROS_ERROR("Parameters 'rgbd_topic' not set");
+        ROS_ERROR("Parameters 'camera_topic' not set");
         return 0;
     }
 
