@@ -76,6 +76,8 @@ bool srvRecognizePerson(ed_perception::RecognizePerson::Request& req, ed_percept
         return true;
     }
 
+    ROS_INFO_STREAM("srvRecognizePerson: sensor pose: " << sensor_pose);
+
     openface_ros::DetectFace srv;
 
     cv_bridge::CvImage image_msg;
@@ -126,17 +128,24 @@ bool srvRecognizePerson(ed_perception::RecognizePerson::Request& req, ed_percept
         det.name_score = -min_error;
 
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        // Get depth roi
+        // Get face depth ROI
+
+        const cv::Mat& depth = image->getDepthImage();
 
         cv::Rect roi_rgb(det_of.x, det_of.y, det_of.width, det_of.height);
-        float rgb_depth_width_ratio = (float)(image->getDepthImage().cols) / image->getRGBImage().cols;
+        float rgb_depth_width_ratio = (float)(depth.cols) / image->getRGBImage().cols;
         cv::Rect roi_depth(rgb_depth_width_ratio * roi_rgb.tl(), rgb_depth_width_ratio * roi_rgb.br());
         cv::Point roi_depth_center = 0.5 * (roi_depth.tl() + roi_depth.br());
 
-        cv::Mat face_depth = image->getDepthImage()(roi_depth);
+        cv::Rect roi_depth_capped(cv::Point(std::max(0, roi_depth.x),
+                                            std::max(0, roi_depth.y)),
+                                  cv::Point(std::min(depth.cols - 1, roi_depth.br().x),
+                                            std::min(depth.rows - 1, roi_depth.br().y)));
+
+        cv::Mat face_depth = depth(roi_depth_capped);
 
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        // Get median depth
+        // Get median depth of face ROI
 
         std::vector<float> depths;
         for(unsigned int j = 0; j < face_depth.cols * face_depth.rows; ++j)
@@ -161,12 +170,12 @@ bool srvRecognizePerson(ed_perception::RecognizePerson::Request& req, ed_percept
         rgbd::View view(*image, image->getDepthImage().cols);
         geo::Vec3 face_pos = view.getRasterizer().project2Dto3D(roi_depth_center.x, roi_depth_center.y) * median_depth;
 
-        ROS_INFO_STREAM("Face " << i << ": position in camera frame: " << face_pos);
-
         geo::Pose3D pose = geo::Pose3D::identity();
         pose.t = face_pos;
 
         geo::Pose3D pose_MAP = sensor_pose * pose;
+
+        ROS_INFO_STREAM("Face " << i << ": position in camera frame: " << face_pos << ", in map frame: " << pose_MAP.t);
 
         det.pose.header.frame_id = "/map";
         geo::convert(pose_MAP, det.pose.pose);
