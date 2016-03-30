@@ -191,7 +191,7 @@ include_directories(
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
 
-add_executable(face_recognition
+add_executable(face_recognition2
     src/face_recognition.cpp
 )
-target_link_libraries(face_recognition ${catkin_LIBRARIES})
+target_link_libraries(face_recognition2 ${catkin_LIBRARIES})
