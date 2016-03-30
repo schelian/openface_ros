@@ -16,6 +16,32 @@ import openface
 
 from face_client import FaceClient
 
+
+def _get_roi(bgr_image, detection):
+    factor_x = 0.1
+    factor_y = 0.2
+
+    # Get the roi
+    min_y = detection.top()
+    max_y = detection.bottom()
+    min_x = detection.left()
+    max_x = detection.right()
+
+    dx = max_x - min_x
+    dy = max_y - min_y
+
+    padding_x = int(factor_x * dx)
+    padding_y = int(factor_y * dy)
+
+    # Don't go out of bound
+    min_y = max(0, min_y - padding_y)
+    max_y = min(max_y + padding_y, bgr_image.shape[0]-1)
+    min_x = max(0, min_x - padding_x)
+    max_x = min(max_x + padding_x, bgr_image.shape[1]-1)
+
+    return bgr_image[min_y:max_y, min_x:max_x]
+
+
 def _get_min_l2_distance(vector_list_a, vector_b):
     return min([np.dot(vector_a - vector_b, vector_a - vector_b) for vector_a in vector_list_a])
 
@@ -41,8 +67,21 @@ class OpenfaceROS:
         # For attributes
         self._face_client = FaceClient('69efefc20c7f42d8af1f2646ce6742ec', '5fab420ca6cf4ff28e7780efcffadb6c')
 
+    def _get_recognition(self, bgr_roi):
+        names = []
+        l2_distances = []
+        try:
+            recognition_rep = self._get_rep(bgr_roi)
+            names = self._face_dict.keys()
+            l2_distances = [_get_min_l2_distance(reps, recognition_rep) for reps in self._face_dict.values()]
+        except Exception as e:
+            warn_msg = "Could not get representation of face image but detector found one: %s" % e
+            rospy.logwarn(warn_msg)
+
+        return names, l2_distances
+
     def _get_attrs(self, bgr_roi):
-        buffer = cv2.imencode('.jpg', bgr_roi)[1].tostring()
+        img_string = cv2.imencode('.jpg', bgr_roi)[1].tostring()
 
         result = {
             "age" : 0,
@@ -51,7 +90,7 @@ class OpenfaceROS:
         }
 
         try:
-            response = self._face_client.faces_recognize('guido', buffer=buffer, namespace = 'robocup')
+            response = self._face_client.faces_recognize('guido', buffer=img_string, namespace = 'robocup')
             attributes = response["photos"][0]["tags"][0]["attributes"]
 
             result["gender_is_male"] = attributes["gender"]["value"] == "male"
@@ -61,7 +100,6 @@ class OpenfaceROS:
             pass
 
         return result
-
 
     def _get_rep(self, bgr_image):
         rgb_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2RGB)
@@ -123,23 +161,17 @@ class OpenfaceROS:
         cv2.imwrite("%s/%s_detect.jpeg" % (self._storage_folder, now.strftime("%Y-%m-%d-%H-%M-%d-%f")), bgr_image)
 
         for detection in detections:
-            bgr_roi = bgr_image[detection.top():detection.bottom(), detection.left():detection.right()]
+            bgr_roi = _get_roi(bgr_image, detection)
 
             now = datetime.now()
             cv2.imwrite("%s/%s_detection.jpeg" % (self._storage_folder, now.strftime("%Y-%m-%d-%H-%M-%d-%f")), bgr_roi)
 
-            try:
-                detection_rep = self._get_rep(bgr_roi)
-            except Exception as e:
-                warn_msg = "Could not get representation of face image: %s" % e
-                rospy.logwarn(warn_msg)
-                continue
-
+            names, l2_distances = self._get_recognition(bgr_roi)
             attrs = self._get_attrs(bgr_roi)
 
             response["face_detections"].append(FaceDetection(
-                names=self._face_dict.keys(),
-                l2_distances=[_get_min_l2_distance(reps, detection_rep) for reps in self._face_dict.values()],
+                names=names,
+                l2_distances=l2_distances,
                 x=detection.top(),
                 y=detection.left(),
                 width=detection.width(),
