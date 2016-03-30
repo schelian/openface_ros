@@ -50,10 +50,15 @@ class OpenfaceROS:
             "gender_confidence" : 0
         }
 
-        # try:
-        #     response = self._face_client.faces_recognize('guido', buffer=buffer, namespace = 'robocup')
-        # except Exception as e:
-        #     pass
+        try:
+            response = self._face_client.faces_recognize('guido', buffer=buffer, namespace = 'robocup')
+            attributes = response["photos"][0]["tags"][0]["attributes"]
+
+            result["gender_is_male"] = attributes["gender"]["value"] == "male"
+            result["gender_confidence"] = float(.01 * attributes["gender"]["confidence"])
+            result["age"] = int(attributes["age_est"]["value"])
+        except Exception as e:
+            pass
 
         return result
 
@@ -113,6 +118,9 @@ class OpenfaceROS:
             "face_detections" : [],
             "error_msg" : ""
         }
+
+        now = datetime.now()
+        cv2.imwrite("%s/%s_detect.jpeg" % (self._storage_folder, now.strftime("%Y-%m-%d-%H-%M-%d-%f")), bgr_image)
 
         for detection in detections:
             bgr_roi = bgr_image[detection.top():detection.bottom(), detection.left():detection.right()]
