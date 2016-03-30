@@ -1,12 +1,5 @@
-uint8 MALE = 1
-uint8 FEMALE = 2
-
-string name
-float32 name_score  # the higher, the more probable 'name' is correct
-
-# Other 
-uint32 age
-uint8 gender
+string[] names
+float32[] l2_distances  # the lower, the more probable 'names[i]' is correct
 
 # ROI
 uint32 x

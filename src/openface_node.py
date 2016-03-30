@@ -1,128 +1,114 @@
 #!/usr/bin/env python
 
-import roslib
-import sys
 import rospy
-import cv2
-from std_msgs.msg import String
-from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 
 from openface_ros.srv import LearnFace, DetectFace
+from openface_ros.msg import FaceDetection
+
+import numpy as np
+import cv2
+import os
+
+import dlib
+import openface
+
+
+def _get_min_l2_distance(vector_list_a, vector_b):
+    return min([np.dot(vector_a - vector_b, vector_a - vector_b) for vector_a in vector_list_a])
+
 
 class OpenfaceROS:
+    def __init__(self, align_path, net_path):
+        self._bridge = CvBridge()
+        self._learn_srv = rospy.Service('learn', LearnFace, self._learn_face_srv)
+        self._detect_srv = rospy.Service('detect', DetectFace, self._detect_face_srv)
 
-	def __init__(self):
-		self._bridge = CvBridge()
-		self._learn_srv = rospy.Service('learn', LearnFace, self._learn_face_srv)
-		self._detect_srv = rospy.Service('detect', DetectFace, self._detect_face_srv)
+        # Init align and net
+        self._align = openface.AlignDlib(align_path)
+        self._net = openface.TorchNeuralNet(net_path, imgDim=96, cuda=False)
+        self._face_detector = dlib.get_frontal_face_detector()
 
-	def _learn_face_srv(req):
-		try:
-			cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
-		except CvBridgeError as e:
-			print(e)
+        self._face_dict = {}  # Mapping from string to list of reps
 
-	def _detect_face_srv(req):
-		try:
-			cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
-		except CvBridgeError as e:
-			print(e)
+    def _get_rep(self, bgr_image):
+        rgb_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2RGB)
 
-	def callback(self, data):
-		
+        bb = self._align.getLargestFaceBoundingBox(rgb_image)
+        if bb is None:
+            raise Exception("Unable to find a face in image")
 
-		(rows,cols,channels) = cv_image.shape
-		if cols > 60 and rows > 60 :
-		cv2.circle(cv_image, (50,50), 10, 255)
+        aligned_face = self._align.align(96, rgb_image, bb, landmarkIndices=openface.AlignDlib.OUTER_EYES_AND_NOSE)
+        if aligned_face is None:
+            raise Exception("Unable to align face bb image")
 
-		cv2.imshow("Image window", cv_image)
-		cv2.waitKey(3)
+        return self._net.forward(aligned_face)
 
-		try:
-		self.image_pub.publish(self.bridge.cv2_to_imgmsg(cv_image, "bgr8"))
-		except CvBridgeError as e:
-	print(e)
+    def _learn_face_srv(self, req):
+        try:
+            bgr_image = self._bridge.imgmsg_to_cv2(req.image, "bgr8")
+        except CvBridgeError as e:
+            error_msg = "Could not convert to opencv image: %s" % e
+            rospy.logerr(error_msg)
+            return {"error_msg": error_msg}
+
+        try:
+            rep = self._get_rep(bgr_image)
+        except Exception as e:
+            error_msg = "Could not get representation of face image: %s" % e
+            rospy.logerr(error_msg)
+            return {"error_msg": error_msg}
+
+        if req.name not in self._face_dict:
+            self._face_dict[req.name] = []
+
+        self._face_dict[req.name].append(rep)
+
+        rospy.loginfo("Succesfully learned face of '%s'" % req.name)
+
+        return {"error_msg": ""}
+
+    def _detect_face_srv(self, req):
+        try:
+            bgr_image = self._bridge.imgmsg_to_cv2(req.image, "bgr8")
+        except CvBridgeError as e:
+            error_msg = "Could not convert to opencv image: %s" % e
+            rospy.logerr(error_msg)
+            return {"error_msg": error_msg}
+
+        # Display the resulting frame
+        detections = self._face_detector(bgr_image, 1)  # 1 = upsample factor
+
+        response = {
+            "face_detections" : [],
+            "error_msg" : ""
+        }
+
+        for detection in detections:
+            brg_roi = bgr_image[detection.top():detection.bottom(), detection.left():detection.right()]
+            try:
+                detection_rep = self._get_rep(brg_roi)
+            except Exception as e:
+                warn_msg = "Could not get representation of face image: %s" % e
+                rospy.logwarn(warn_msg)
+                continue
+
+            response["face_detections"].append(FaceDetection(
+                names=self._face_dict.keys(),
+                l2_distances=[_get_min_l2_distance(reps, detection_rep) for reps in self._face_dict.values()],
+                x=detection.top(),
+                y=detection.left(),
+                width=detection.width(),
+                height=detection.height()
+            ))
+
+        return response
 
 if __name__ == '__main__':
-    openface_node = OpenfaceROS()
-	rospy.init_node('openface')
-	rospy.spin()
+    rospy.init_node('openface')
 
-__author__ = 'amigo'
+    align_path_param = rospy.get_param('~align_path', os.path.expanduser('~/openface/models/dlib/shape_predictor_68_face_landmarks.dat'))
+    net_path_param = rospy.get_param('~net_path', os.path.expanduser('~/openface/models/openface/nn4.small2.v1.t7'))
 
-# import os
-# import collections
-# import numpy as np
-# import cv2
-# from sklearn.svm import SVC
-# import openface
-
-# fileDir = os.path.dirname(os.path.expanduser("~/openface/demos/"))
-# modelDir = os.path.join(fileDir, '..', 'models')
-# dlibModelDir = os.path.join(modelDir, 'dlib')
-# openfaceModelDir = os.path.join(modelDir, 'openface')
-
-# imgDim = 96
-
-# align = openface.AlignDlib(os.path.join(dlibModelDir, "shape_predictor_68_face_landmarks.dat"))
-# net = openface.TorchNeuralNet(os.path.join(openfaceModelDir, 'nn4.small2.v1.t7'), imgDim)
-
-# class FaceRecognizer(object):
-#     def __init__(self):
-#         self.traindata = []
-#         self.trainlabels = []
-
-#         self.classifier = SVC(C=1, kernel='linear', probability=True)
-
-#     def add_sample(self, name, imagePath):
-#         representation = self._represent(imagePath)
-
-#         self.traindata += [representation]
-#         self.trainlabels += [name]
-
-
-#     def cluster(self):
-#         self.classifier.fit(self.traindata, self.trainlabels)
-
-#     def _represent(self, imagePath):
-#         bgrImg = cv2.imread(imagePath)
-#         if bgrImg is None:
-#             raise Exception("Unable to load image: {}".format(imagePath))
-#         rgbImg = cv2.cvtColor(bgrImg, cv2.COLOR_BGR2RGB)
-
-
-#         bb = align.getLargestFaceBoundingBox(rgbImg)
-#         if bb is None:
-#             raise Exception("Unable to find a face: {}".format(imagePath))
-
-#         alignedFace = align.align(imgDim, rgbImg, bb, landmarkIndices=openface.AlignDlib.OUTER_EYES_AND_NOSE)
-#         if alignedFace is None:
-#             raise Exception("Unable to align image: {}".format(imagePath))
-
-#         rep = net.forward(alignedFace)
-
-#         return rep
-
-#     def classify(self, imagePath):
-#         representation = self._represent(imagePath)
-#         name = self.classifier.predict([representation])
-
-#         return name
-
-# def test():
-#     rec = FaceRecognizer()
-#     rec.add_sample('adams', os.path.expanduser("~/openface/images/examples/adams.jpg"))
-#     rec.add_sample('clapton', os.path.expanduser("~/openface/images/examples/clapton-1.jpg"))
-#     rec.add_sample('clapton', os.path.expanduser("~/openface/images/examples/clapton-2.jpg"))
-#     rec.add_sample('lennon', os.path.expanduser("~/openface/images/examples/lennon-1.jpg"))
-#     rec.add_sample('lennon', os.path.expanduser("~/openface/images/examples/lennon-2.jpg"))
-
-#     rec.cluster()
-
-#     name = rec.classify(os.path.expanduser("~/openface/images/examples/lennon-2.jpg"))
-#     print name[0]
-#     assert name == "lennon"
-
-# if __name__ == "__main__":
-#     test()
+    openface_node = OpenfaceROS(align_path_param, net_path_param)
+    rospy.spin()
