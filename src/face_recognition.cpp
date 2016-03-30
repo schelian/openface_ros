@@ -88,12 +88,17 @@ bool srvRecognizePerson(ed_perception::RecognizePerson::Request& req, ed_percept
     image_msg.image = image->getRGBImage();
     srv.request.image = *image_msg.toImageMsg();
 
+//    cv::imshow("face_detection", image->getRGBImage());
+//    cv::waitKey();
+
     if (!client_detect_face.call(srv))
     {
         res.error_msg = "Could not call openface server (detect)";
         ROS_ERROR("%s", res.error_msg.c_str());
         return true;
     }
+
+    ROS_INFO_STREAM("Openface found " << srv.response.face_detections.size() << " faces");
 
     for(unsigned int i = 0; i < srv.response.face_detections.size(); ++i)
     {
@@ -194,8 +199,8 @@ int main(int argc, char **argv)
 
     image_buffer.initialize(rgbd_topic);
 
-    client_learn_face = nh.serviceClient<openface_ros::LearnFace>("learn_face");
-    client_detect_face = nh.serviceClient<openface_ros::DetectFace>("detect_face");
+    client_learn_face = nh.serviceClient<openface_ros::LearnFace>("face/learn");
+    client_detect_face = nh.serviceClient<openface_ros::DetectFace>("face/detect");
 
     ros::ServiceServer srv_learn_person = nh.advertiseService("learn_person", srvLearnPerson);
     ros::ServiceServer srv_recognize_person = nh.advertiseService("recognize_person", srvRecognizePerson);
