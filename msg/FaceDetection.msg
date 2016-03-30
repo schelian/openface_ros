@@ -6,3 +6,7 @@ uint32 x
 uint32 y
 uint32 width
 uint32 height
+
+uint32 age
+bool gender_is_male
+float32 gender_confidence

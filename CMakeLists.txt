@@ -5,10 +5,14 @@ project(openface_ros)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
+  rgbd
   message_generation
   message_runtime
   sensor_msgs
   rospy
+  ed_perception
+  ed_sensor_integration
+  cv_bridge
 )
 
 ## System dependencies are found with CMake's conventions
@@ -186,3 +190,8 @@ include_directories(
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
+
+add_executable(face_recognition
+    src/face_recognition.cpp
+)
+target_link_libraries(face_recognition ${catkin_LIBRARIES})

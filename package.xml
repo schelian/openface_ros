@@ -25,4 +25,16 @@
   <run_depend>usb_cam</run_depend>
   <build_depend>usb_cam</build_depend>
 
+  <run_depend>ed_perception</run_depend>
+  <build_depend>ed_perception</build_depend>
+
+  <run_depend>ed_sensor_integration</run_depend>
+  <build_depend>ed_sensor_integration</build_depend>
+
+  <run_depend>cv_bridge</run_depend>
+  <build_depend>cv_bridge</build_depend>
+
+  <run_depend>rgbd</run_depend>
+  <build_depend>rgbd</build_depend>
+
 </package>
