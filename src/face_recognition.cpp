@@ -181,6 +181,21 @@ bool srvRecognizePerson(ed_perception::RecognizePerson::Request& req, ed_percept
         geo::convert(pose_MAP, det.pose.pose);
 
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        // Save images
+
+        std::stringstream ss_filename;
+        ss_filename << "/tmp/face-" << i;
+
+        cv::Mat debug_rgb = image->getRGBImage().clone();
+        cv::rectangle(debug_rgb, roi_rgb, cv::Scalar(255, 255, 255), 2);
+
+        cv::Mat debug_depth = depth.clone();
+        cv::rectangle(debug_depth, roi_depth_capped, cv::Scalar(10), 2);
+
+        cv::imwrite(ss_filename.str() + "-rgb.jpg", debug_rgb);
+        cv::imwrite(ss_filename.str() + "-depth.jpg", debug_depth / 10);
+
+        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         // TODO
 
         det.age = det_of.age;
