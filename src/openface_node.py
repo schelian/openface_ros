@@ -14,7 +14,7 @@ from datetime import datetime
 import dlib
 import openface
 
-from face_client import FaceClient
+#from face_client import FaceClient
 
 
 def _get_roi(bgr_image, detection):
@@ -65,7 +65,7 @@ class OpenfaceROS:
         self._storage_folder = storage_folder
 
         # For attributes
-        self._face_client = FaceClient('69efefc20c7f42d8af1f2646ce6742ec', '5fab420ca6cf4ff28e7780efcffadb6c')
+        #self._face_client = FaceClient('69efefc20c7f42d8af1f2646ce6742ec', '5fab420ca6cf4ff28e7780efcffadb6c')
 
     def _get_recognition(self, bgr_roi):
         names = []
@@ -81,7 +81,7 @@ class OpenfaceROS:
         return names, l2_distances
 
     def _get_attrs(self, bgr_roi):
-        img_string = cv2.imencode('.jpg', bgr_roi)[1].tostring()
+#        img_string = cv2.imencode('.jpg', bgr_roi)[1].tostring()
 
         result = {
             "age" : 0,
@@ -89,15 +89,15 @@ class OpenfaceROS:
             "gender_confidence" : 0
         }
 
-        try:
-            response = self._face_client.faces_recognize('guido', buffer=img_string, namespace = 'robocup')
-            attributes = response["photos"][0]["tags"][0]["attributes"]
-
-            result["gender_is_male"] = attributes["gender"]["value"] == "male"
-            result["gender_confidence"] = float(.01 * attributes["gender"]["confidence"])
-            result["age"] = int(attributes["age_est"]["value"])
-        except Exception as e:
-            pass
+#        try:
+#            response = self._face_client.faces_recognize('guido', buffer=img_string, namespace = 'robocup')
+#            attributes = response["photos"][0]["tags"][0]["attributes"]
+#
+#            result["gender_is_male"] = attributes["gender"]["value"] == "male"
+#            result["gender_confidence"] = float(.01 * attributes["gender"]["confidence"])
+#            result["age"] = int(attributes["age_est"]["value"])
+#        except Exception as e:
+#            pass
 
         return result
 
