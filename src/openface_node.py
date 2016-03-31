@@ -172,8 +172,8 @@ class OpenfaceROS:
             response["face_detections"].append(FaceDetection(
                 names=names,
                 l2_distances=l2_distances,
-                x=detection.top(),
-                y=detection.left(),
+                x=detection.left(),
+                y=detection.top(),
                 width=detection.width(),
                 height=detection.height(),
                 gender_is_male=attrs["gender_is_male"],
