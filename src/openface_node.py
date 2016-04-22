@@ -5,6 +5,7 @@ from cv_bridge import CvBridge, CvBridgeError
 
 from openface_ros.srv import LearnFace, DetectFace
 from openface_ros.msg import FaceDetection
+from std_srvs.srv import Empty
 
 import numpy as np
 import cv2
@@ -15,6 +16,28 @@ import dlib
 import openface
 
 from face_client import FaceClient
+
+from timeout import Timeout
+
+
+# For attributes
+face_client = FaceClient('69efefc20c7f42d8af1f2646ce6742ec', '5fab420ca6cf4ff28e7780efcffadb6c')
+def _external_request_with_timeout(buffers):
+    timeout_duration = 60
+    rospy.loginfo("Trying external API request for %d seconds", timeout_duration)
+    timeout_function = Timeout(face_client.faces_recognize, timeout_duration)
+    return timeout_function(buffers)
+
+
+def _set_label(img, label, origin):
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    scale = 0.4
+    thickness = 1
+
+    text = cv2.getTextSize(label, font, scale, thickness)
+    p2 = (origin[0] + text[0][0], origin[1] -text[0][1])
+    cv2.rectangle(img, origin, p2, (0, 0, 0), -1)
+    cv2.putText(img, label, origin, font, scale, (255, 255, 255), thickness, 8)
 
 
 def _get_roi(bgr_image, detection):
@@ -51,6 +74,7 @@ class OpenfaceROS:
         self._bridge = CvBridge()
         self._learn_srv = rospy.Service('learn', LearnFace, self._learn_face_srv)
         self._detect_srv = rospy.Service('detect', DetectFace, self._detect_face_srv)
+        self._clear_srv = rospy.Service('clear', Empty, self._clear_faces_srv)
 
         # Init align and net
         self._align = openface.AlignDlib(align_path)
@@ -64,12 +88,20 @@ class OpenfaceROS:
 
         self._storage_folder = storage_folder
 
-        # For attributes
-        self._face_client = FaceClient('69efefc20c7f42d8af1f2646ce6742ec', '5fab420ca6cf4ff28e7780efcffadb6c')
+    def _update_detections_with_recognitions(self, detections):
+        detections = [self._update_detection_with_recognition(d) for d in detections]
+
+        # Now find the detection index with highest name probability
+        for name in self._face_dict.keys():
+            l2_distances = [ dict(zip(d["names"], d["l2_distances"]))[name] for d in detections ]
+            min_index = l2_distances.index(min(l2_distances))
+            detections[min_index]["name"] = name
+
+        return detections
 
     def _update_detection_with_recognition(self, detection):
         try:
-            recognition_rep = self._get_rep(detection["roi_image"])
+            recognition_rep = self._get_rep(detection["roi"])
             detection["names"] = self._face_dict.keys()
             detection["l2_distances"] = [_get_min_l2_distance(reps, recognition_rep) for reps in self._face_dict.values()]
         except Exception as e:
@@ -79,12 +111,14 @@ class OpenfaceROS:
         return detection
 
     def _update_detections_with_attributes(self, detections):
-
         buffers = [cv2.imencode('.jpg', d["roi"])[1].tostring() for d in detections]
 
-        response = self._face_client.faces_recognize(buffers)
-
-        import ipdb; ipdb.set_trace()
+        try:
+            response = _external_request_with_timeout(buffers)
+            for i, photo in enumerate(response["photos"]):
+                detections[i]["attrs"] = photo["tags"][0]["attributes"]
+        except Exception as e:
+            rospy.logerr("External API call failed: %s", e)
 
         return detections
 
@@ -128,13 +162,34 @@ class OpenfaceROS:
 
         return {"error_msg": ""}
 
-    def _save_images(self, rois, bgr_image):
+    def _save_images(self, detections, bgr_image):
         now = datetime.now()
         cv2.imwrite("%s/%s_detect.jpeg" % (self._storage_folder, now.strftime("%Y-%m-%d-%H-%M-%d-%f")), bgr_image)
 
-        for roi in rois:
+        for d in detections:
             now = datetime.now()
-            cv2.imwrite("%s/roi_%s_detection.jpeg" % (self._storage_folder, now.strftime("%Y-%m-%d-%H-%M-%d-%f")), roi)
+            cv2.imwrite("%s/roi_%s_detection.jpeg" % (self._storage_folder, now.strftime("%Y-%m-%d-%H-%M-%d-%f")), d["roi"])
+
+            cv2.rectangle(bgr_image, (d["x"], d["y"]), (d["x"] + d["width"], d["y"] + d["height"]), (0, 0, 255), 3)
+
+            txt = ""
+            try:
+                if "name" in d:
+                    txt += d["name"]
+                txt += " (" + d["attrs"]["gender"]["value"] + ", " + d["attrs"]["age_est"]["value"] + ")"
+            except KeyError:
+                pass
+
+            _set_label(bgr_image, txt, (d["x"], d["y"]))
+
+        cv2.imwrite("%s/%s_annotated.jpeg" % (self._storage_folder, now.strftime("%Y-%m-%d-%H-%M-%d-%f")), bgr_image)
+
+        rospy.loginfo("Wrote images to '%s'", self._storage_folder)
+
+    def _clear_faces_srv(self, req):
+        rospy.loginfo("Cleared all faces")
+        self._face_dict = {}
+        return {}
 
     def _detect_face_srv(self, req):
         try:
@@ -149,19 +204,22 @@ class OpenfaceROS:
                        "width": d.width(), "height": d.height()} for d
                       in self._face_detector(bgr_image, 1)]  # 1 = upsample factor
 
-        self._save_images([d["roi"] for d in detections], bgr_image)
-
         # Try to recognize
-        detections = [self._update_detection_with_recognition(d) for d in detections]
+        detections = self._update_detections_with_recognitions(detections)
 
         # Try to add attributes
-        detections = self._update_detections_with_attributes(detections)
+        if req.external_api_request:
+            detections = self._update_detections_with_attributes(detections)
+
+        # Save iamegs
+        self._save_images(detections, bgr_image)
 
         return {
             "face_detections": [FaceDetection(names=d["names"], l2_distances=d["l2_distances"],
                                               x=d["x"], y=d["y"], width=d["width"], height=d["height"],
-                                              gender_is_male=d["attrs"]["gender_is_male"],
-                                              gender_confidence=d["attrs"]["gender_confidence"], age=d["attrs"]["age"])
+                                              gender_is_male=d["attrs"]["gender"]["value"] == "male",
+                                              gender_confidence=float(d["attrs"]["gender"]["confidence"]),
+                                              age=int(d["attrs"]["age_est"]["value"]))
                                 for d in detections],
             "error_msg": ""
         }

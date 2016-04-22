@@ -121,7 +121,7 @@ class FaceClient(object):
         buffer = None
         aggressive = False
         train = None
-        namespace = None
+        namespace = "robocup"
 
         (facebook_uids, twitter_uids) = self.__check_user_auth_credentials(uids)
 
