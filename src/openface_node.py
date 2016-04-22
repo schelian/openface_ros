@@ -14,7 +14,7 @@ from datetime import datetime
 import dlib
 import openface
 
-#from face_client import FaceClient
+from face_client import FaceClient
 
 
 def _get_roi(bgr_image, detection):
@@ -65,41 +65,28 @@ class OpenfaceROS:
         self._storage_folder = storage_folder
 
         # For attributes
-        #self._face_client = FaceClient('69efefc20c7f42d8af1f2646ce6742ec', '5fab420ca6cf4ff28e7780efcffadb6c')
+        self._face_client = FaceClient('69efefc20c7f42d8af1f2646ce6742ec', '5fab420ca6cf4ff28e7780efcffadb6c')
 
-    def _get_recognition(self, bgr_roi):
-        names = []
-        l2_distances = []
+    def _update_detection_with_recognition(self, detection):
         try:
-            recognition_rep = self._get_rep(bgr_roi)
-            names = self._face_dict.keys()
-            l2_distances = [_get_min_l2_distance(reps, recognition_rep) for reps in self._face_dict.values()]
+            recognition_rep = self._get_rep(detection["roi_image"])
+            detection["names"] = self._face_dict.keys()
+            detection["l2_distances"] = [_get_min_l2_distance(reps, recognition_rep) for reps in self._face_dict.values()]
         except Exception as e:
             warn_msg = "Could not get representation of face image but detector found one: %s" % e
             rospy.logwarn(warn_msg)
 
-        return names, l2_distances
+        return detection
 
-    def _get_attrs(self, bgr_roi):
-#        img_string = cv2.imencode('.jpg', bgr_roi)[1].tostring()
+    def _update_detections_with_attributes(self, detections):
 
-        result = {
-            "age" : 0,
-            "gender_is_male" : False,
-            "gender_confidence" : 0
-        }
+        buffers = [cv2.imencode('.jpg', d["roi"])[1].tostring() for d in detections]
 
-#        try:
-#            response = self._face_client.faces_recognize('guido', buffer=img_string, namespace = 'robocup')
-#            attributes = response["photos"][0]["tags"][0]["attributes"]
-#
-#            result["gender_is_male"] = attributes["gender"]["value"] == "male"
-#            result["gender_confidence"] = float(.01 * attributes["gender"]["confidence"])
-#            result["age"] = int(attributes["age_est"]["value"])
-#        except Exception as e:
-#            pass
+        response = self._face_client.faces_recognize(buffers)
 
-        return result
+        import ipdb; ipdb.set_trace()
+
+        return detections
 
     def _get_rep(self, bgr_image):
         rgb_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2RGB)
@@ -141,6 +128,14 @@ class OpenfaceROS:
 
         return {"error_msg": ""}
 
+    def _save_images(self, rois, bgr_image):
+        now = datetime.now()
+        cv2.imwrite("%s/%s_detect.jpeg" % (self._storage_folder, now.strftime("%Y-%m-%d-%H-%M-%d-%f")), bgr_image)
+
+        for roi in rois:
+            now = datetime.now()
+            cv2.imwrite("%s/roi_%s_detection.jpeg" % (self._storage_folder, now.strftime("%Y-%m-%d-%H-%M-%d-%f")), roi)
+
     def _detect_face_srv(self, req):
         try:
             bgr_image = self._bridge.imgmsg_to_cv2(req.image, "bgr8")
@@ -150,38 +145,26 @@ class OpenfaceROS:
             return {"error_msg": error_msg}
 
         # Display the resulting frame
-        detections = self._face_detector(bgr_image, 1)  # 1 = upsample factor
+        detections = [{"roi": _get_roi(bgr_image, d), "x": d.left(), "y": d.top(),
+                       "width": d.width(), "height": d.height()} for d
+                      in self._face_detector(bgr_image, 1)]  # 1 = upsample factor
 
-        response = {
-            "face_detections" : [],
-            "error_msg" : ""
+        self._save_images([d["roi"] for d in detections], bgr_image)
+
+        # Try to recognize
+        detections = [self._update_detection_with_recognition(d) for d in detections]
+
+        # Try to add attributes
+        detections = self._update_detections_with_attributes(detections)
+
+        return {
+            "face_detections": [FaceDetection(names=d["names"], l2_distances=d["l2_distances"],
+                                              x=d["x"], y=d["y"], width=d["width"], height=d["height"],
+                                              gender_is_male=d["attrs"]["gender_is_male"],
+                                              gender_confidence=d["attrs"]["gender_confidence"], age=d["attrs"]["age"])
+                                for d in detections],
+            "error_msg": ""
         }
-
-        now = datetime.now()
-        cv2.imwrite("%s/%s_detect.jpeg" % (self._storage_folder, now.strftime("%Y-%m-%d-%H-%M-%d-%f")), bgr_image)
-
-        for detection in detections:
-            bgr_roi = _get_roi(bgr_image, detection)
-
-            now = datetime.now()
-            cv2.imwrite("%s/%s_detection.jpeg" % (self._storage_folder, now.strftime("%Y-%m-%d-%H-%M-%d-%f")), bgr_roi)
-
-            names, l2_distances = self._get_recognition(bgr_roi)
-            attrs = self._get_attrs(bgr_roi)
-
-            response["face_detections"].append(FaceDetection(
-                names=names,
-                l2_distances=l2_distances,
-                x=detection.left(),
-                y=detection.top(),
-                width=detection.width(),
-                height=detection.height(),
-                gender_is_male=attrs["gender_is_male"],
-                gender_confidence=attrs["gender_confidence"],
-                age=attrs["age"]
-            ))
-
-        return response
 
 if __name__ == '__main__':
     rospy.init_node('openface')
