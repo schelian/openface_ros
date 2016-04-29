@@ -19,9 +19,19 @@
 #include <ros/node_handle.h>
 #include <ros/console.h>
 
+#include <std_srvs/Empty.h>
+
 ImageBuffer image_buffer;
 ros::ServiceClient client_detect_face;
 ros::ServiceClient client_learn_face;
+ros::ServiceClient client_clear_faces;
+
+// ----------------------------------------------------------------------------------------------------
+
+bool srvClearPersons(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res)
+{
+    return client_clear_faces.call(req, res);
+}
 
 // ----------------------------------------------------------------------------------------------------
 
@@ -230,9 +240,11 @@ int main(int argc, char **argv)
 
     client_learn_face = nh.serviceClient<openface_ros::LearnFace>("face/learn");
     client_detect_face = nh.serviceClient<openface_ros::DetectFace>("face/detect");
+    client_clear_faces = nh.serviceClient<std_srvs::Empty>("face/clear");
 
     ros::ServiceServer srv_learn_person = nh.advertiseService("learn_person", srvLearnPerson);
     ros::ServiceServer srv_recognize_person = nh.advertiseService("recognize_person", srvRecognizePerson);
+    ros::ServiceServer srv_clear_persons = nh.advertiseService("clear_persons", srvClearPersons);
 
     ros::spin();
 
