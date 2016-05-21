@@ -94,6 +94,7 @@ bool srvRecognizePerson(ed_perception::RecognizePerson::Request& req, ed_percept
     image_msg.encoding = sensor_msgs::image_encodings::BGR8;
     image_msg.image = image->getRGBImage();
     srv.request.image = *image_msg.toImageMsg();
+    srv.request.external_api_request = req.external_api_request;
 
 //    cv::imshow("face_detection", image->getRGBImage());
 //    cv::waitKey();
