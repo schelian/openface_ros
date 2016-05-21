@@ -91,15 +91,21 @@ class OpenfaceROS:
     def _update_detections_with_recognitions(self, detections):
         detections = [self._update_detection_with_recognition(d) for d in detections]
 
-        # Now find the detection index with highest name probability
+        # Now find the detection index with highest name probability, only for image in /tmp/faces
         for name in self._face_dict.keys():
-            l2_distances = [ dict(zip(d["names"], d["l2_distances"]))[name] for d in detections ]
-            min_index = l2_distances.index(min(l2_distances))
-            detections[min_index]["name"] = name
+            try:
+                l2_distances = [ dict(zip(d["names"], d["l2_distances"]))[name] for d in detections ]
+                min_index = l2_distances.index(min(l2_distances))
+                detections[min_index]["name"] = name
+            except: # If recognizer does not find face in detection
+                pass
 
         return detections
 
     def _update_detection_with_recognition(self, detection):
+        detection["names"] = []
+        detection["l2_distances"] = []
+
         try:
             recognition_rep = self._get_rep(detection["roi"])
             detection["names"] = self._face_dict.keys()
@@ -217,9 +223,9 @@ class OpenfaceROS:
         return {
             "face_detections": [FaceDetection(names=d["names"], l2_distances=d["l2_distances"],
                                               x=d["x"], y=d["y"], width=d["width"], height=d["height"],
-                                              gender_is_male=d["attrs"]["gender"]["value"] == "male",
-                                              gender_confidence=float(d["attrs"]["gender"]["confidence"]),
-                                              age=int(d["attrs"]["age_est"]["value"]))
+                                              gender_is_male=(d["attrs"]["gender"]["value"] == "male" if "attrs" in d else 0),
+                                              gender_confidence=(float(d["attrs"]["gender"]["confidence"]) if "attrs" in d else 0),
+                                              age=(int(d["attrs"]["age_est"]["value"]) if "attrs" in d else 0))
                                 for d in detections],
             "error_msg": ""
         }
