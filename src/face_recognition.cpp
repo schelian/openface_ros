@@ -137,6 +137,8 @@ bool srvRecognizePerson(ed_perception::RecognizePerson::Request& req, ed_percept
         }
 
         det.name_score = -min_error;
+        det.gender_score = det_of.gender_score;
+        det.age_score = det_of.age_score;
 
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         // Get face depth ROI

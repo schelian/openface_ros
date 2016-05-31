@@ -8,5 +8,6 @@ uint32 width
 uint32 height
 
 uint32 age
+float32 age_score
 bool gender_is_male
-float32 gender_confidence
+float32 gender_score

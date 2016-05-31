@@ -227,7 +227,8 @@ class OpenfaceROS:
             "face_detections": [FaceDetection(names=d["names"], l2_distances=d["l2_distances"],
                                               x=d["x"], y=d["y"], width=d["width"], height=d["height"],
                                               gender_is_male=(d["attrs"]["gender"]["value"] == "male" if "attrs" in d else 0),
-                                              gender_confidence=(float(d["attrs"]["gender"]["confidence"]) if "attrs" in d else 0),
+                                              gender_score=(float(d["attrs"]["gender"]["confidence"]) if "attrs" in d else 0),
+                                              age_score=(1.0 if "attrs" in d else 0),
                                               age=(int(d["attrs"]["age_est"]["value"]) if "attrs" in d else 0))
                                 for d in detections],
             "error_msg": ""
