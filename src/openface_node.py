@@ -213,6 +213,9 @@ class OpenfaceROS:
         # Try to recognize
         detections = self._update_detections_with_recognitions(detections)
 
+        rospy.logerr("This is for debugging")
+        rospy.logerr(detections)
+
         # Try to add attributes
         if req.external_api_request:
             detections = self._update_detections_with_attributes(detections)
