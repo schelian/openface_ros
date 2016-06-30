@@ -150,7 +150,7 @@ class OpenfaceROS:
             return {"error_msg": error_msg}
 
         now = datetime.now()
-        cv2.imwrite("%s/%s_learn_%s.jpeg" % (self._storage_folder, now.strftime("%Y-%m-%d-%H-%M-%d-%f"), req.name), bgr_image)
+        cv2.imwrite("%s/%s_learn_%s.jpeg" % (self._storage_folder, now.strftime("%Y-%m-%d-%H-%M-%S-%f"), req.name), bgr_image)
 
         try:
             rep = self._get_rep(bgr_image)
