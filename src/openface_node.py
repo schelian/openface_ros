@@ -220,11 +220,12 @@ class OpenfaceROS:
         if req.external_api_request:
             detections = self._update_detections_with_attributes(detections)
 
-        # Save iamegs
+        # Save images
         self._save_images(detections, bgr_image)
 
         return {
-            "face_detections": [FaceDetection(names=d["names"], l2_distances=d["l2_distances"],
+            "face_detections": [FaceDetection(names=(d["names"] if "name" in d else []),
+                                              l2_distances=(d["l2_distances"] if "name" in d else []),
                                               x=d["x"], y=d["y"], width=d["width"], height=d["height"],
                                               gender_is_male=(d["attrs"]["gender"]["value"] == "male" if "attrs" in d else 0),
                                               gender_score=(float(d["attrs"]["gender"]["confidence"]) if "attrs" in d else 0),
