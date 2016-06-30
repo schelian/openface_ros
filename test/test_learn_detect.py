@@ -44,11 +44,11 @@ def callback(data):
     cv2.imshow("Image window", cv_image)
     key = cv2.waitKey(10)
 
-    if key == 1048684: # L
+    if key == 1048684 or key == 108: # L
         print learn_srv(image=data, name=raw_input("Name? "))
-    elif key == 1048676: # D
+    elif key == 1048676 or key == 100: # D
         print detect_srv(image=data, external_api_request=external_api_request)
-    elif key == 1048675: # C
+    elif key == 1048675 or key == 99: # C
         print clear_srv()
 
     return
