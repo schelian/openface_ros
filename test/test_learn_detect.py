@@ -17,7 +17,7 @@ rospy.init_node('test_learn_detect')
 try:
     interactive = rospy.get_param( "~interactive", True )
     external_api_request = rospy.get_param("~external_api_request", True)
-    # save_images = rospy.get_param( "~save_images", True )
+    save_images = rospy.get_param( "~save_images", True )
     max_distance_for_match = rospy.get_param("~max_distance_for_match", .66)
 except KeyError as e:
     rospy.logerr("Please specify param: %s", e)
@@ -56,7 +56,7 @@ def callback(data):
     if key == 1048684 or key == 108: # L
         print learn_srv(image=data, name=raw_input("Name? "))
     elif key == 1048676 or key == 100: # D
-        detections = detect_srv(image=data, external_api_request=external_api_request)
+        detections = detect_srv(image=data, external_api_request=external_api_request, save_images=save_images)
         print detections
 
         # handle no detections
@@ -65,7 +65,7 @@ def callback(data):
             msg_pub( '(no detections)' )
             return
         
-        # unpack detections, find the winner
+        # unpack detections, find the best match across all detections (yes, the way the winner found below could be done more elegantly :-P)
         names = detections.face_detections[0].names
         distances = detections.face_detections[0].l2_distances
 

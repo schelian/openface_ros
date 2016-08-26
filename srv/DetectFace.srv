@@ -1,5 +1,6 @@
 sensor_msgs/Image image
 bool external_api_request
+bool save_images
 ---
 FaceDetection[] face_detections
 string error_msg

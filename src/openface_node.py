@@ -237,8 +237,8 @@ class OpenfaceROS:
             detections = self._update_detections_with_attributes(detections)
 
         # Save images
-        #if req.save_images:
-        self._save_images(detections, bgr_image)
+        if req.save_images:
+            self._save_images(detections, bgr_image)
 
         return {
             "face_detections": [FaceDetection(names=(d["names"] if "name" in d else []),
