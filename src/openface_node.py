@@ -18,6 +18,7 @@ import openface
 from face_client import FaceClient
 
 from timeout import Timeout
+import pickle
 
 
 # For attributes
@@ -82,6 +83,15 @@ class OpenfaceROS:
         self._face_detector = dlib.get_frontal_face_detector()
 
         self._face_dict = {}  # Mapping from string to list of reps
+
+        self._face_dict_filename = rospy.get_param( '~face_dict_filename', '' )
+        if ( self._face_dict_filename != '' ):
+          if ( not os.path.isfile( self._face_dict_filename ) ):
+            print '_face_dict does not exist; will save to %s' % self._face_dict_filename
+          else:
+            with open( self._face_dict_filename, 'rb') as f:
+              self._face_dict = pickle.load( f )
+              print 'read _face_dict: %s' % self._face_dict_filename
 
         if not os.path.exists(storage_folder):
             os.makedirs(storage_folder)
@@ -166,6 +176,12 @@ class OpenfaceROS:
 
         rospy.loginfo("Succesfully learned face of '%s'" % req.name)
 
+        # from http://www.diveintopython3.net/serializing.html
+        if ( self._face_dict_filename != '' ):
+            with open( self._face_dict_filename, 'wb' ) as f:
+               pickle.dump( self._face_dict, f );
+               print "wrote _face_dict: %s" % self._face_dict_filename
+
         return {"error_msg": ""}
 
     def _save_images(self, detections, bgr_image):
@@ -221,6 +237,7 @@ class OpenfaceROS:
             detections = self._update_detections_with_attributes(detections)
 
         # Save images
+        #if req.save_images:
         self._save_images(detections, bgr_image)
 
         return {
